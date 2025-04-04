@@ -15,6 +15,14 @@ import pandas as pd
 PROGRAM_VERSION = "1.0 - 2025"
 PROGRAM = "Load Combination Calculator to AS 3610.2 (Int):2023"
 
+# Company details
+COMPANY_NAME = "tekhne Consulting Engineers"
+COMPANY_ADDRESS = "123 Engineering Way, Sydney NSW 2000"
+
+# Logo URLs
+LOGO_URL = "https://drive.google.com/uc?export=download&id=1VebdT2loVGX57noP9t2GgQhwCNn8AA3h"
+FALLBACK_LOGO_URL = "https://onedrive.live.com/download?cid=A48CC9068E3FACE0&resid=A48CC9068E3FACE0%21s252b6fb7fcd04f53968b2a09114d33ed"
+
 def calculate_concrete_load(thickness, reinforcement_percentage):
     """Calculate G_c in kN/m² based on concrete thickness and reinforcement percentage."""
     base_density = 24  # kN/m³
@@ -24,9 +32,6 @@ def calculate_concrete_load(thickness, reinforcement_percentage):
 
 def compute_combinations(G_f, G_c, Q_w, Q_m, Q_h, W_s, W_u, F_w, Q_x, P_c, I, stage, gamma_d):
     """Compute load combinations for a given stage and gamma_d."""
-    G_total = G_f + (G_c if stage != "1" else 0)
-    P_c_adj = P_c if stage != "1" else 0
-
     combinations = []
 
     if stage == "1":
@@ -58,27 +63,27 @@ def compute_combinations(G_f, G_c, Q_w, Q_m, Q_h, W_s, W_u, F_w, Q_x, P_c, I, st
     return combinations
 
 def get_combination_description(stage, index):
-    """Get the description text for each combination."""
+    """Get the description text for each combination with proper formatting."""
     if stage == "1":
         descriptions = [
-            "1: 1.35G_f",
-            "2: 1.2G_f + 1.5Q_w + 1.5Q_m + 1.5Q_h + 1W_s",
-            "3: 1.2G_f + 1W_u + 1.5F_w",
-            "4: 0.9G_f + 1W_u + 1.5F_w",
-            "5: 1G_f + 1.1I"
+            "1: 1.35G<sub>f</sub>",
+            "2: 1.2G<sub>f</sub> + 1.5Q<sub>w</sub> + 1.5Q<sub>m</sub> + 1.5Q<sub>h</sub> + 1W<sub>s</sub>",
+            "3: 1.2G<sub>f</sub> + 1W<sub>u</sub> + 1.5F<sub>w</sub>",
+            "4: 0.9G<sub>f</sub> + 1W<sub>u</sub> + 1.5F<sub>w</sub>",
+            "5: 1G<sub>f</sub> + 1.1I"
         ]
     elif stage == "2":
         descriptions = [
-            "6: 1.35G_f + 1.35G_c",
-            "7: 1.2G_f + 1.2G_c + 1.5Q_w + 1.5Q_m + 1.5Q_h + 1W_s + 1.5F_w + 1.5Q_x + P_c",
-            "8: 1G_f + 1G_c + 1.1I"
+            "6: 1.35G<sub>f</sub> + 1.35G<sub>c</sub>",
+            "7: 1.2G<sub>f</sub> + 1.2G<sub>c</sub> + 1.5Q<sub>w</sub> + 1.5Q<sub>m</sub> + 1.5Q<sub>h</sub> + 1W<sub>s</sub> + 1.5F<sub>w</sub> + 1.5Q<sub>x</sub> + P<sub>c</sub>",
+            "8: 1G<sub>f</sub> + 1G<sub>c</sub> + 1.1I"
         ]
     elif stage == "3":
         descriptions = [
-            "9: 1.35G_f + 1.35G_c",
-            "10: 1.2G_f + 1.2G_c + 1.5Q_w + 1.5Q_m + 1.5Q_h + 1W_s + 1.5F_w + 1.5Q_x + P_c",
-            "11: 1.2G_f + 1.2G_c + 1W_u",
-            "12: 1G_f + 1G_c + 1.1I"
+            "9: 1.35G<sub>f</sub> + 1.35G<sub>c</sub>",
+            "10: 1.2G<sub>f</sub> + 1.2G<sub>c</sub> + 1.5Q<sub>w</sub> + 1.5Q<sub>m</sub> + 1.5Q<sub>h</sub> + 1W<sub>s</sub> + 1.5F<sub>w</sub> + 1.5Q<sub>x</sub> + P<sub>c</sub>",
+            "11: 1.2G<sub>f</sub> + 1.2G<sub>c</sub> + 1.0W<sub>u</sub>",
+            "12: 1G<sub>f</sub> + 1G<sub>c</sub> + 1.1I"
         ]
     return descriptions[index] if index < len(descriptions) else f"Combination {index+1}"
 
@@ -86,7 +91,7 @@ def create_results_dataframe(combinations, stage, gamma_d):
     """Create a pandas DataFrame for the results."""
     data = []
     for i, (vertical, horizontal) in enumerate(combinations):
-        desc = get_combination_description(stage, i)
+        desc = get_combination_description(stage, i).replace("<sub>", "").replace("</sub>", "")
         data.append({
             "Combination": desc,
             "Vertical Load (kN/m²)": f"{vertical:.2f}",
@@ -95,116 +100,275 @@ def create_results_dataframe(combinations, stage, gamma_d):
         })
     return pd.DataFrame(data)
 
+def download_logo():
+    """Download company logo for PDF report."""
+    logo_file = None
+    for url in [LOGO_URL, FALLBACK_LOGO_URL]:
+        try:
+            response = requests.get(url, stream=True, timeout=10)
+            if response.status_code == 200:
+                logo_file = "company_logo.png"
+                with open(logo_file, 'wb') as f:
+                    f.write(response.content)
+                break
+        except Exception:
+            continue
+    return logo_file if logo_file and os.path.exists(logo_file) else None
+
 def generate_pdf_report(inputs, results, project_number, project_name):
-    """Generate a PDF report with proper formatting."""
+    """Generate a professional PDF report with company branding."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, 
                           leftMargin=15*mm, rightMargin=15*mm,
-                          topMargin=20*mm, bottomMargin=20*mm)
+                          topMargin=10*mm, bottomMargin=15*mm)
     
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(name='Title', parent=styles['Title'], 
-                               fontSize=16, alignment=TA_CENTER, spaceAfter=20)
-    heading_style = ParagraphStyle(name='Heading', parent=styles['Heading2'], 
-                                 fontSize=14, spaceAfter=10)
-    normal_style = styles['Normal']
+    
+    # Custom styles
+    title_style = ParagraphStyle(
+        name='Title',
+        parent=styles['Title'],
+        fontSize=16,
+        leading=20,
+        alignment=TA_CENTER,
+        spaceAfter=12
+    )
+    
+    subtitle_style = ParagraphStyle(
+        name='Subtitle',
+        parent=styles['Normal'],
+        fontSize=10,
+        alignment=TA_CENTER,
+        spaceAfter=15
+    )
+    
+    heading1_style = ParagraphStyle(
+        name='Heading1',
+        parent=styles['Heading1'],
+        fontSize=14,
+        spaceBefore=20,
+        spaceAfter=10
+    )
+    
+    heading2_style = ParagraphStyle(
+        name='Heading2',
+        parent=styles['Heading2'],
+        fontSize=12,
+        spaceBefore=15,
+        spaceAfter=8
+    )
+    
+    normal_style = ParagraphStyle(
+        name='Normal',
+        parent=styles['Normal'],
+        fontSize=10,
+        leading=12,
+        spaceAfter=8
+    )
+    
+    table_header_style = ParagraphStyle(
+        name='TableHeader',
+        parent=styles['Normal'],
+        fontSize=10,
+        leading=12,
+        fontName='Helvetica-Bold',
+        alignment=TA_CENTER
+    )
+    
+    table_cell_style = ParagraphStyle(
+        name='TableCell',
+        parent=styles['Normal'],
+        fontSize=9,
+        leading=11,
+        alignment=TA_LEFT
+    )
+    
+    table_cell_center_style = ParagraphStyle(
+        name='TableCellCenter',
+        parent=styles['Normal'],
+        fontSize=9,
+        leading=11,
+        alignment=TA_CENTER
+    )
     
     elements = []
     
-    # Title
-    elements.append(Paragraph("Load Combination Report", title_style))
-    elements.append(Paragraph(f"Project: {project_name} ({project_number})", normal_style))
-    elements.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d')}", normal_style))
-    elements.append(Spacer(1, 20))
+    # Header with logo and company info
+    logo_file = download_logo()
+    if logo_file:
+        try:
+            logo = Image(logo_file, width=40*mm, height=15*mm)
+            logo.hAlign = 'LEFT'
+            elements.append(logo)
+        except:
+            pass
     
-    # Input Parameters
-    elements.append(Paragraph("Input Parameters", heading_style))
+    company_info = f"""<b>{COMPANY_NAME}</b><br/>{COMPANY_ADDRESS}"""
+    elements.append(Paragraph(company_info, normal_style))
+    elements.append(Spacer(1, 15*mm))
+    
+    # Title and project info
+    elements.append(Paragraph("Load Combination Report for Falsework Design", title_style))
+    elements.append(Paragraph(f"to AS 3610.2 (Int):2023 - Strength Limit State", subtitle_style))
+    
+    project_info = f"""
+    <b>Project:</b> {project_name}<br/>
+    <b>Number:</b> {project_number}<br/>
+    <b>Date:</b> {datetime.now().strftime('%d %B %Y')}
+    """
+    elements.append(Paragraph(project_info, normal_style))
+    elements.append(Spacer(1, 15*mm))
+    
+    # Input Parameters section
+    elements.append(Paragraph("Input Parameters", heading1_style))
+    
     input_data = [
-        ["Parameter", "Value"],
-        ["Formwork self-weight (G_f)", f"{inputs['G_f']:.2f} kN/m²"],
-        ["Concrete thickness", f"{inputs['thickness']:.2f} m"],
-        ["Reinforcement percentage", f"{inputs['reinforcement_percentage']:.1f}%"],
-        ["Concrete load (G_c)", f"{inputs['G_c']:.2f} kN/m²"],
-        ["Workers & equipment - Stage 1 (Q_w1)", f"{inputs['Q_w1']:.2f} kN/m²"],
-        ["Workers & equipment - Stage 2 (Q_w2)", f"{inputs['Q_w2']:.2f} kN/m²"],
-        ["Workers & equipment - Stage 3 (Q_w3)", f"{inputs['Q_w3']:.2f} kN/m²"],
-        ["Stacked materials (Q_m)", f"{inputs['Q_m']:.2f} kN/m²"],
-        ["Horizontal imposed load (Q_h)", f"{inputs['Q_h']:.2f} kN/m"],
-        ["Service wind load (W_s)", f"{inputs['W_s']:.2f} kN/m²"],
-        ["Ultimate wind load (W_u)", f"{inputs['W_u']:.2f} kN/m²"],
-        ["Flowing water load (F_w)", f"{inputs['F_w']:.2f} kN/m²"],
-        ["Other actions (Q_x)", f"{inputs['Q_x']:.2f} kN/m²"],
-        ["Lateral concrete pressure (P_c)", f"{inputs['P_c']:.2f} kN/m²"],
-        ["Impact load (I)", f"{inputs['I']:.2f} kN/m²"],
+        ["Parameter", "Value", "", "Parameter", "Value"]
     ]
     
-    input_table = Table(input_data, colWidths=[100*mm, 60*mm])
+    input_params = [
+        ("Formwork self-weight (G<sub>f</sub>)", f"{inputs['G_f']:.2f} kN/m²"),
+        ("Concrete thickness", f"{inputs['thickness']:.2f} m"),
+        ("Reinforcement percentage", f"{inputs['reinforcement_percentage']:.1f}%"),
+        ("Concrete load (G<sub>c</sub>)", f"{inputs['G_c']:.2f} kN/m²"),
+        ("Workers & equipment - Stage 1 (Q<sub>w1</sub>)", f"{inputs['Q_w1']:.2f} kN/m²"),
+        ("Workers & equipment - Stage 2 (Q<sub>w2</sub>)", f"{inputs['Q_w2']:.2f} kN/m²"),
+        ("Workers & equipment - Stage 3 (Q<sub>w3</sub>)", f"{inputs['Q_w3']:.2f} kN/m²"),
+        ("Stacked materials (Q<sub>m</sub>)", f"{inputs['Q_m']:.2f} kN/m²"),
+        ("Horizontal imposed load (Q<sub>h</sub>)", f"{inputs['Q_h']:.2f} kN/m"),
+        ("Service wind load (W<sub>s</sub>)", f"{inputs['W_s']:.2f} kN/m²"),
+        ("Ultimate wind load (W<sub>u</sub>)", f"{inputs['W_u']:.2f} kN/m²"),
+        ("Flowing water load (F<sub>w</sub>)", f"{inputs['F_w']:.2f} kN/m²"),
+        ("Other actions (Q<sub>x</sub>)", f"{inputs['Q_x']:.2f} kN/m²"),
+        ("Lateral concrete pressure (P<sub>c</sub>)", f"{inputs['P_c']:.2f} kN/m²"),
+        ("Impact load (I)", f"{inputs['I']:.2f} kN/m²")
+    ]
+    
+    # Split into two columns
+    for i in range(0, len(input_params), 2):
+        row = []
+        row.append(Paragraph(input_params[i][0], table_cell_style))
+        row.append(Paragraph(input_params[i][1], table_cell_center_style))
+        row.append("")
+        if i+1 < len(input_params):
+            row.append(Paragraph(input_params[i+1][0], table_cell_style))
+            row.append(Paragraph(input_params[i+1][1], table_cell_center_style))
+        else:
+            row.append("")
+            row.append("")
+        input_data.append(row)
+    
+    input_table = Table(input_data, colWidths=[70*mm, 30*mm, 10*mm, 70*mm, 30*mm])
     input_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+        ('ALIGN', (4, 0), (4, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
     ]))
     elements.append(input_table)
     elements.append(PageBreak())
     
-    # Results
+    # Results section
+    elements.append(Paragraph("Load Combination Results", heading1_style))
+    elements.append(Paragraph("Strength Limit State - AS 3610.2 (Int):2023 Table 3.3.1", subtitle_style))
+    elements.append(Spacer(1, 10*mm))
+    
     for stage in ["1", "2", "3"]:
         if stage not in results:
             continue
             
         data = results[stage]
-        elements.append(Paragraph(f"Stage {stage}: {data['description']}", heading_style))
+        stage_title = f"Stage {stage}: {data['description']}"
+        elements.append(Paragraph(stage_title, heading2_style))
+        elements.append(Spacer(1, 5*mm))
         
         # Critical Members
-        elements.append(Paragraph("Critical Members (γ_d = 1.3)", styles['Heading3']))
-        critical_data = [["Combination", "Vertical Load (kN/m²)", "Horizontal Load (kN/m or kN/m²)"]]
+        elements.append(Paragraph("Critical Members (γ<sub>d</sub> = 1.3)", styles['Heading3']))
+        
+        critical_data = [[
+            Paragraph("Combination", table_header_style),
+            Paragraph("Vertical Load<br/>(kN/m²)", table_header_style),
+            Paragraph("Horizontal Load<br/>(kN/m or kN/m²)", table_header_style)
+        ]]
+        
         for i, (vertical, horizontal) in enumerate(data['critical']):
             desc = get_combination_description(stage, i)
-            critical_data.append([desc, f"{vertical:.2f}", f"{horizontal:.2f}"])
+            critical_data.append([
+                Paragraph(desc, table_cell_style),
+                Paragraph(f"{vertical:.2f}", table_cell_center_style),
+                Paragraph(f"{horizontal:.2f}", table_cell_center_style)
+            ])
         
-        critical_table = Table(critical_data, colWidths=[100*mm, 50*mm, 50*mm])
+        critical_table = Table(critical_data, colWidths=[100*mm, 40*mm, 50*mm])
         critical_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
             ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
             ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
         ]))
         elements.append(critical_table)
-        elements.append(Spacer(1, 15))
+        elements.append(Spacer(1, 10*mm))
         
         # Non-Critical Members
-        elements.append(Paragraph("Non-Critical Members (γ_d = 1.0)", styles['Heading3']))
-        non_critical_data = [["Combination", "Vertical Load (kN/m²)", "Horizontal Load (kN/m or kN/m²)"]]
+        elements.append(Paragraph("Non-Critical Members (γ<sub>d</sub> = 1.0)", styles['Heading3']))
+        
+        non_critical_data = [[
+            Paragraph("Combination", table_header_style),
+            Paragraph("Vertical Load<br/>(kN/m²)", table_header_style),
+            Paragraph("Horizontal Load<br/>(kN/m or kN/m²)", table_header_style)
+        ]]
+        
         for i, (vertical, horizontal) in enumerate(data['non_critical']):
             desc = get_combination_description(stage, i)
-            non_critical_data.append([desc, f"{vertical:.2f}", f"{horizontal:.2f}"])
+            non_critical_data.append([
+                Paragraph(desc, table_cell_style),
+                Paragraph(f"{vertical:.2f}", table_cell_center_style),
+                Paragraph(f"{horizontal:.2f}", table_cell_center_style)
+            ])
         
-        non_critical_table = Table(non_critical_data, colWidths=[100*mm, 50*mm, 50*mm])
+        non_critical_table = Table(non_critical_data, colWidths=[100*mm, 40*mm, 50*mm])
         non_critical_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
             ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
             ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
         ]))
         elements.append(non_critical_table)
         
         if stage != "3":
             elements.append(PageBreak())
     
-    doc.build(elements)
+    # Footer
+    def add_footer(canvas, doc):
+        canvas.saveState()
+        canvas.setFont('Helvetica', 8)
+        footer_text = f"{PROGRAM} {PROGRAM_VERSION} | {COMPANY_NAME} © | Page {doc.page}"
+        canvas.drawCentredString(A4[0]/2.0, 10*mm, footer_text)
+        canvas.restoreState()
+    
+    doc.build(elements, onFirstPage=add_footer, onLaterPages=add_footer)
     buffer.seek(0)
     return buffer
 
@@ -311,13 +475,15 @@ def main():
             st.dataframe(non_critical_df, hide_index=True, use_container_width=True)
         
         # Generate and download PDF
-        pdf_buffer = generate_pdf_report(inputs, results, project_number, project_name)
-        st.download_button(
-            label="Download PDF Report",
-            data=pdf_buffer,
-            file_name=f"Load_Combination_Report_{project_number}.pdf",
-            mime="application/pdf"
-        )
+        with st.spinner("Generating PDF report..."):
+            pdf_buffer = generate_pdf_report(inputs, results, project_number, project_name)
+            st.download_button(
+                label="Download PDF Report",
+                data=pdf_buffer,
+                file_name=f"Load_Combination_Report_{project_number}.pdf",
+                mime="application/pdf",
+                help="Download a professional PDF report with all calculations"
+            )
 
 if __name__ == "__main__":
     main()
