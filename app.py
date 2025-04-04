@@ -195,11 +195,12 @@ def generate_pdf_report(inputs, results, project_number, project_name):
     elements.append(Paragraph("Load Combination Report for Falsework Design", title_style))
     elements.append(Paragraph(f"to AS 3610.2 (Int):2023 - Strength Limit State", subtitle_style))
     
-    project_info = f"""
-    <b>Project:</b> {project_name}<br/>
-    <b>Number:</b> {project_number}<br/>
-    <b>Date:</強調>{datetime.now().strftime('%d %B %Y')}
-    """
+    # Cleaned-up project_info string
+    project_info = (
+        f"<b>Project:</b> {project_name}<br/>"
+        f"<b>Number:</b> {project_number}<br/>"
+        f"<b>Date:</b> {datetime.now().strftime('%d %B %Y')}"
+    )
     elements.append(Paragraph(project_info, normal_style))
     elements.append(Spacer(1, 15*mm))
     
@@ -290,7 +291,7 @@ def generate_pdf_report(inputs, results, project_number, project_name):
                 Paragraph(f"{horizontal:.2f}", table_cell_center_style)
             ])
         
-        critical_table = Table(critical_data, colWidths=[100*mm,  ذکر40*mm, 50*mm])
+        critical_table = Table(critical_data, colWidths=[100*mm, 40*mm, 50*mm])
         critical_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
