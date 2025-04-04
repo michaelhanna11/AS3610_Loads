@@ -18,7 +18,7 @@ PROGRAM = "Load Combination Calculator to AS 3610.2 (Int):2023"
 
 # Company details
 COMPANY_NAME = "tekhne Consulting Engineers"
-COMPANY_ADDRESS = "123 Engineering Way, Sydney NSW 2000"
+COMPANY_ADDRESS = ""
 
 # Logo URLs
 LOGO_URL = "https://drive.google.com/uc?export=download&id=1VebdT2loVGX57noP9t2GgQhwCNn8AA3h"
@@ -259,7 +259,7 @@ def generate_pdf_report(inputs, results, project_number, project_name):
             row.append("")
         input_data.append(row)
     
-    input_table = Table(input_data, colWidths=[70*mm, 30*mm, 10*mm, 70*mm, 30*mm])
+    input_table = Table(input_data, colWidths=[60*mm, 30*mm, 10*mm, 60*mm, 30*mm])
     input_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
