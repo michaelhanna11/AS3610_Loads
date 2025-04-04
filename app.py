@@ -276,6 +276,20 @@ def generate_pdf_report(inputs, results, project_number, project_name):
     ]))
     elements.append(input_table)
     elements.append(PageBreak())
+
+    # Header with logo and company info
+    logo_file = download_logo()
+    if logo_file:
+        try:
+            logo = Image(logo_file, width=40*mm, height=15*mm)
+            logo.hAlign = 'LEFT'
+            elements.append(logo)
+        except:
+            pass
+    
+    company_info = f"""<b>{COMPANY_NAME}</b><br/>{COMPANY_ADDRESS}"""
+    elements.append(Paragraph(company_info, normal_style))
+    elements.append(Spacer(1, 15*mm))
     
     # Results section
     elements.append(Paragraph("Load Combination Results", heading1_style))
