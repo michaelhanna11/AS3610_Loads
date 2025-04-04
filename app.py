@@ -8,19 +8,12 @@ from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_JUSTIFY, TA_LEFT
+from reportlab.lib.enums import TA_JUSTIFY, TA_LEFT, TA_CENTER
+import pandas as pd
 
 # Program details
 PROGRAM_VERSION = "1.0 - 2025"
 PROGRAM = "Load Combination Calculator to AS 3610.2 (Int):2023"
-
-# Company details
-COMPANY_NAME = "tekhne Consulting Engineers"
-COMPANY_ADDRESS = "   "  # Placeholder; update with actual address if needed
-
-# Logo URLs
-LOGO_URL = "https://drive.google.com/uc?export=download&id=1VebdT2loVGX57noP9t2GgQhwCNn8AA3h"
-FALLBACK_LOGO_URL = "https://onedrive.live.com/download?cid=A48CC9068E3FACE0&resid=A48CC9068E3FACE0%21s252b6fb7fcd04f53968b2a09114d33ed"
 
 def calculate_concrete_load(thickness, reinforcement_percentage):
     """Calculate G_c in kN/m² based on concrete thickness and reinforcement percentage."""
@@ -64,82 +57,156 @@ def compute_combinations(G_f, G_c, Q_w, Q_m, Q_h, W_s, W_u, F_w, Q_x, P_c, I, st
     
     return combinations
 
-def format_combination_text(stage, index, vertical, horizontal, gamma_d):
-    """Format combination text with proper symbols."""
-    symbols = {
-        'G_f': 'G_f', 'G_c': 'G_c', 'Q_w': 'Q_w', 'Q_m': 'Q_m', 
-        'Q_h': 'Q_h', 'W_s': 'W_s', 'W_u': 'W_u', 'F_w': 'F_w',
-        'Q_x': 'Q_x', 'P_c': 'P_c', 'I': 'I', 'gamma': 'γ_d'
-    }
-    
+def get_combination_description(stage, index):
+    """Get the description text for each combination."""
     if stage == "1":
-        if index == 0: return f"1: 1.35 {symbols['G_f']}"
-        elif index == 1: return f"2: 1.2 {symbols['G_f']} + 1.5 {symbols['Q_w']} + 1.5 {symbols['Q_m']} + 1.5 {symbols['Q_h']} + 1 {symbols['W_s']} (γ_d applied)"
-        elif index == 2: return f"3: 1.2 {symbols['G_f']} + 1 {symbols['W_u']} + 1.5 {symbols['F_w']}"
-        elif index == 3: return f"4: 0.9 {symbols['G_f']} + 1 {symbols['W_u']} + 1.5 {symbols['F_w']}"
-        elif index == 4: return f"5: 1 {symbols['G_f']} + 1.1 {symbols['I']}"
-    
+        descriptions = [
+            "1: 1.35G_f",
+            "2: 1.2G_f + 1.5Q_w + 1.5Q_m + 1.5Q_h + 1W_s",
+            "3: 1.2G_f + 1W_u + 1.5F_w",
+            "4: 0.9G_f + 1W_u + 1.5F_w",
+            "5: 1G_f + 1.1I"
+        ]
     elif stage == "2":
-        if index == 0: return f"6: 1.35 {symbols['G_f']} + 1.35 {symbols['G_c']} (γ_d applied)"
-        elif index == 1: return f"7: 1.2 {symbols['G_f']} + 1.2 {symbols['G_c']} + 1.5 {symbols['Q_w']} + 1.5 {symbols['Q_m']} + 1.5 {symbols['Q_h']} + 1 {symbols['W_s']} + 1.5 {symbols['F_w']} + 1.5 {symbols['Q_x']} + {symbols['P_c']} (γ_d applied)"
-        elif index == 2: return f"8: 1 {symbols['G_f']} + 1 {symbols['G_c']} + 1.1 {symbols['I']}"
-    
+        descriptions = [
+            "6: 1.35G_f + 1.35G_c",
+            "7: 1.2G_f + 1.2G_c + 1.5Q_w + 1.5Q_m + 1.5Q_h + 1W_s + 1.5F_w + 1.5Q_x + P_c",
+            "8: 1G_f + 1G_c + 1.1I"
+        ]
     elif stage == "3":
-        if index == 0: return f"9: 1.35 {symbols['G_f']} + 1.35 {symbols['G_c']} (γ_d applied)"
-        elif index == 1: return f"10: 1.2 {symbols['G_f']} + 1.2 {symbols['G_c']} + 1.5 {symbols['Q_w']} + 1.5 {symbols['Q_m']} + 1.5 {symbols['Q_h']} + 1 {symbols['W_s']} + 1.5 {symbols['F_w']} + 1.5 {symbols['Q_x']} + {symbols['P_c']} (γ_d applied)"
-        elif index == 2: return f"11: 1.2 {symbols['G_f']} + 1.2 {symbols['G_c']} + 1.0 {symbols['W_u']}"
-        elif index == 3: return f"12: 1 {symbols['G_f']} + 1 {symbols['G_c']} + 1.1 {symbols['I']}"
-    
-    return f"Combination {index+1}"
+        descriptions = [
+            "9: 1.35G_f + 1.35G_c",
+            "10: 1.2G_f + 1.2G_c + 1.5Q_w + 1.5Q_m + 1.5Q_h + 1W_s + 1.5F_w + 1.5Q_x + P_c",
+            "11: 1.2G_f + 1.2G_c + 1W_u",
+            "12: 1G_f + 1G_c + 1.1I"
+        ]
+    return descriptions[index] if index < len(descriptions) else f"Combination {index+1}"
 
-def display_results_in_streamlit(results):
-    """Display results in Streamlit with proper formatting."""
-    if not isinstance(results, dict):
-        st.error("Invalid results format")
-        return
-        
+def create_results_dataframe(combinations, stage, gamma_d):
+    """Create a pandas DataFrame for the results."""
+    data = []
+    for i, (vertical, horizontal) in enumerate(combinations):
+        desc = get_combination_description(stage, i)
+        data.append({
+            "Combination": desc,
+            "Vertical Load (kN/m²)": f"{vertical:.2f}",
+            "Horizontal Load (kN/m or kN/m²)": f"{horizontal:.2f}",
+            "γ_d": f"{gamma_d:.1f}"
+        })
+    return pd.DataFrame(data)
+
+def generate_pdf_report(inputs, results, project_number, project_name):
+    """Generate a PDF report with proper formatting."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, 
+                          leftMargin=15*mm, rightMargin=15*mm,
+                          topMargin=20*mm, bottomMargin=20*mm)
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(name='Title', parent=styles['Title'], 
+                               fontSize=16, alignment=TA_CENTER, spaceAfter=20)
+    heading_style = ParagraphStyle(name='Heading', parent=styles['Heading2'], 
+                                 fontSize=14, spaceAfter=10)
+    normal_style = styles['Normal']
+    
+    elements = []
+    
+    # Title
+    elements.append(Paragraph("Load Combination Report", title_style))
+    elements.append(Paragraph(f"Project: {project_name} ({project_number})", normal_style))
+    elements.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d')}", normal_style))
+    elements.append(Spacer(1, 20))
+    
+    # Input Parameters
+    elements.append(Paragraph("Input Parameters", heading_style))
+    input_data = [
+        ["Parameter", "Value"],
+        ["Formwork self-weight (G_f)", f"{inputs['G_f']:.2f} kN/m²"],
+        ["Concrete thickness", f"{inputs['thickness']:.2f} m"],
+        ["Reinforcement percentage", f"{inputs['reinforcement_percentage']:.1f}%"],
+        ["Concrete load (G_c)", f"{inputs['G_c']:.2f} kN/m²"],
+        ["Workers & equipment - Stage 1 (Q_w1)", f"{inputs['Q_w1']:.2f} kN/m²"],
+        ["Workers & equipment - Stage 2 (Q_w2)", f"{inputs['Q_w2']:.2f} kN/m²"],
+        ["Workers & equipment - Stage 3 (Q_w3)", f"{inputs['Q_w3']:.2f} kN/m²"],
+        ["Stacked materials (Q_m)", f"{inputs['Q_m']:.2f} kN/m²"],
+        ["Horizontal imposed load (Q_h)", f"{inputs['Q_h']:.2f} kN/m"],
+        ["Service wind load (W_s)", f"{inputs['W_s']:.2f} kN/m²"],
+        ["Ultimate wind load (W_u)", f"{inputs['W_u']:.2f} kN/m²"],
+        ["Flowing water load (F_w)", f"{inputs['F_w']:.2f} kN/m²"],
+        ["Other actions (Q_x)", f"{inputs['Q_x']:.2f} kN/m²"],
+        ["Lateral concrete pressure (P_c)", f"{inputs['P_c']:.2f} kN/m²"],
+        ["Impact load (I)", f"{inputs['I']:.2f} kN/m²"],
+    ]
+    
+    input_table = Table(input_data, colWidths=[100*mm, 60*mm])
+    input_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+    ]))
+    elements.append(input_table)
+    elements.append(PageBreak())
+    
+    # Results
     for stage in ["1", "2", "3"]:
         if stage not in results:
             continue
             
-        data = results.get(stage, {})
-        if not data or not isinstance(data, dict):
-            st.error(f"Invalid data format for stage {stage}")
-            continue
-            
-        description = data.get("description", f"Stage {stage}")
-        critical = data.get("critical", [])
-        non_critical = data.get("non_critical", [])
-        
-        st.subheader(f"Stage {stage}: {description}")
+        data = results[stage]
+        elements.append(Paragraph(f"Stage {stage}: {data['description']}", heading_style))
         
         # Critical Members
-        st.markdown(f"**Critical Members (γ_d = 1.3)**")
-        if not isinstance(critical, list):
-            st.error("Invalid critical combinations format")
-        else:
-            st.markdown("| Combination | Vertical Load (kN/m²) | Horizontal Load (kN/m or kN/m²) |")
-            st.markdown("|------------|----------------------|--------------------------------|")
-            for i, (vertical, horizontal) in enumerate(critical):
-                combo_text = format_combination_text(stage, i, vertical, horizontal, 1.3)
-                st.markdown(f"| {combo_text} | {vertical:.2f} | {horizontal:.2f} |")
+        elements.append(Paragraph("Critical Members (γ_d = 1.3)", styles['Heading3']))
+        critical_data = [["Combination", "Vertical Load (kN/m²)", "Horizontal Load (kN/m or kN/m²)"]]
+        for i, (vertical, horizontal) in enumerate(data['critical']):
+            desc = get_combination_description(stage, i)
+            critical_data.append([desc, f"{vertical:.2f}", f"{horizontal:.2f}"])
+        
+        critical_table = Table(critical_data, colWidths=[100*mm, 50*mm, 50*mm])
+        critical_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ]))
+        elements.append(critical_table)
+        elements.append(Spacer(1, 15))
         
         # Non-Critical Members
-        st.markdown(f"**Non-Critical Members (γ_d = 1.0)**")
-        if not isinstance(non_critical, list):
-            st.error("Invalid non-critical combinations format")
-        else:
-            st.markdown("| Combination | Vertical Load (kN/m²) | Horizontal Load (kN/m or kN/m²) |")
-            st.markdown("|------------|----------------------|--------------------------------|")
-            for i, (vertical, horizontal) in enumerate(non_critical):
-                combo_text = format_combination_text(stage, i, vertical, horizontal, 1.0)
-                st.markdown(f"| {combo_text} | {vertical:.2f} | {horizontal:.2f} |")
-
-def generate_pdf_report(inputs, results, project_number, project_name):
-    """Generate PDF report."""
-    # PDF generation code would go here
-    # Return a bytes object with the PDF data
-    return None  # Placeholder - implement actual PDF generation
+        elements.append(Paragraph("Non-Critical Members (γ_d = 1.0)", styles['Heading3']))
+        non_critical_data = [["Combination", "Vertical Load (kN/m²)", "Horizontal Load (kN/m or kN/m²)"]]
+        for i, (vertical, horizontal) in enumerate(data['non_critical']):
+            desc = get_combination_description(stage, i)
+            non_critical_data.append([desc, f"{vertical:.2f}", f"{horizontal:.2f}"])
+        
+        non_critical_table = Table(non_critical_data, colWidths=[100*mm, 50*mm, 50*mm])
+        non_critical_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ]))
+        elements.append(non_critical_table)
+        
+        if stage != "3":
+            elements.append(PageBreak())
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
 
 def main():
     st.set_page_config(page_title="Load Combination Calculator", layout="wide")
@@ -223,19 +290,34 @@ def main():
                 "non_critical": non_critical_combinations
             }
         
-        # Display results
+        # Display results in nice tables
         st.header("Load Combination Results")
-        display_results_in_streamlit(results)
+        
+        for stage in ["1", "2", "3"]:
+            if stage not in results:
+                continue
+                
+            data = results[stage]
+            st.subheader(f"Stage {stage}: {data['description']}")
+            
+            # Critical Members
+            st.markdown("**Critical Members (γ_d = 1.3)**")
+            critical_df = create_results_dataframe(data['critical'], stage, 1.3)
+            st.dataframe(critical_df, hide_index=True, use_container_width=True)
+            
+            # Non-Critical Members
+            st.markdown("**Non-Critical Members (γ_d = 1.0)**")
+            non_critical_df = create_results_dataframe(data['non_critical'], stage, 1.0)
+            st.dataframe(non_critical_df, hide_index=True, use_container_width=True)
         
         # Generate and download PDF
-        pdf_data = generate_pdf_report(inputs, results, project_number, project_name)
-        if pdf_data:
-            st.download_button(
-                label="Download PDF Report",
-                data=pdf_data,
-                file_name=f"Load_Combination_Report_{project_number}.pdf",
-                mime="application/pdf"
-            )
+        pdf_buffer = generate_pdf_report(inputs, results, project_number, project_name)
+        st.download_button(
+            label="Download PDF Report",
+            data=pdf_buffer,
+            file_name=f"Load_Combination_Report_{project_number}.pdf",
+            mime="application/pdf"
+        )
 
 if __name__ == "__main__":
     main()
