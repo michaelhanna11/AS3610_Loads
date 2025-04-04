@@ -30,86 +30,116 @@ def calculate_concrete_load(thickness, reinforcement_percentage):
     return G_c
 
 def compute_combinations(G_f, G_c, Q_w, Q_m, Q_h, W_s, W_u, F_w, Q_x, P_c, I, stage, gamma_d):
-    """Compute load combinations for a given stage and gamma_d, splitting into horizontal and vertical components."""
-    # Implementation remains the same as before
-    # ... [previous implementation code] ...
+    """Compute load combinations for a given stage and gamma_d."""
+    G_total = G_f + (G_c if stage != "1" else 0)
+    P_c_adj = P_c if stage != "1" else 0
 
-def display_combinations(combinations, stage, member_type, gamma_d):
-    """Return table data for load combinations with vertical and horizontal components, using scientific notation."""
-    # Implementation remains the same as before
-    # ... [previous implementation code] ...
+    combinations = []
 
-def build_elements(inputs, results, project_number, project_name):
-    """Build the document elements for the PDF."""
-    # Implementation remains the same as before
-    # ... [previous implementation code] ...
+    if stage == "1":
+        # Stage 1 combinations
+        comb_1 = (1.35 * G_f, 0.0)
+        comb_2 = (gamma_d * (1.2 * G_f + 1.5 * Q_w + 1.5 * Q_m + 1.0 * W_s), gamma_d * (1.5 * Q_h))
+        comb_3 = (1.2 * G_f + 1.0 * W_u + 1.5 * F_w, 0.0)
+        comb_4 = (0.9 * G_f + 1.0 * W_u + 1.5 * F_w, 0.0)
+        comb_5 = (1.0 * G_f + 1.1 * I, 0.0)
+        combinations = [comb_1, comb_2, comb_3, comb_4, comb_5]
+    
+    elif stage == "2":
+        # Stage 2 combinations
+        comb_6 = (gamma_d * (1.35 * G_f + 1.35 * G_c), 0.0)
+        comb_7 = (gamma_d * (1.2 * G_f + 1.2 * G_c + 1.5 * Q_w + 1.5 * Q_m + 1.0 * W_s + 1.5 * F_w + 1.5 * Q_x + 1.0 * P_c), 
+                 gamma_d * (1.5 * Q_h))
+        comb_8 = (1.0 * G_f + 1.0 * G_c + 1.1 * I, 0.0)
+        combinations = [comb_6, comb_7, comb_8]
+    
+    elif stage == "3":
+        # Stage 3 combinations
+        comb_9 = (gamma_d * (1.35 * G_f + 1.35 * G_c), 0.0)
+        comb_10 = (gamma_d * (1.2 * G_f + 1.2 * G_c + 1.5 * Q_w + 1.5 * Q_m + 1.0 * W_s + 1.5 * F_w + 1.5 * Q_x + 1.0 * P_c),
+                  gamma_d * (1.5 * Q_h))
+        comb_11 = (1.2 * G_f + 1.2 * G_c + 1.0 * W_u, 0.0)
+        comb_12 = (1.0 * G_f + 1.0 * G_c + 1.1 * I, 0.0)
+        combinations = [comb_9, comb_10, comb_11, comb_12]
+    
+    return combinations
 
-def generate_pdf_report(inputs, results, project_number, project_name):
-    """Generate PDF report."""
-    # Implementation remains the same as before
-    # ... [previous implementation code] ...
-
-def format_math_symbols(text):
-    """Replace HTML-style math symbols with Unicode equivalents for Streamlit display."""
-    replacements = {
-        "<i>G<sub>f</sub></i>": "G_f",
-        "<i>G<sub>c</sub></i>": "G_c",
-        "<i>Q<sub>w</sub></i>": "Q_w",
-        "<i>Q<sub>m</sub></i>": "Q_m",
-        "<i>Q<sub>h</sub></i>": "Q_h",
-        "<i>W<sub>s</sub></i>": "W_s",
-        "<i>W<sub>u</sub></i>": "W_u",
-        "<i>F<sub>w</sub></i>": "F_w",
-        "<i>Q<sub>x</sub></i>": "Q_x",
-        "<i>P<sub>c</sub></i>": "P_c",
-        "<i>I</i>": "I",
-        "<i>γ<sub>d</sub></i>": "γ_d",
-        "<sup>2</sup>": "²",
-        "<sup>3</sup>": "³"
+def format_combination_text(stage, index, vertical, horizontal, gamma_d):
+    """Format combination text with proper symbols."""
+    symbols = {
+        'G_f': 'G_f', 'G_c': 'G_c', 'Q_w': 'Q_w', 'Q_m': 'Q_m', 
+        'Q_h': 'Q_h', 'W_s': 'W_s', 'W_u': 'W_u', 'F_w': 'F_w',
+        'Q_x': 'Q_x', 'P_c': 'P_c', 'I': 'I', 'gamma': 'γ_d'
     }
-    for html, unicode in replacements.items():
-        text = text.replace(html, unicode)
-    return text
+    
+    if stage == "1":
+        if index == 0: return f"1: 1.35 {symbols['G_f']}"
+        elif index == 1: return f"2: 1.2 {symbols['G_f']} + 1.5 {symbols['Q_w']} + 1.5 {symbols['Q_m']} + 1.5 {symbols['Q_h']} + 1 {symbols['W_s']} (γ_d applied)"
+        elif index == 2: return f"3: 1.2 {symbols['G_f']} + 1 {symbols['W_u']} + 1.5 {symbols['F_w']}"
+        elif index == 3: return f"4: 0.9 {symbols['G_f']} + 1 {symbols['W_u']} + 1.5 {symbols['F_w']}"
+        elif index == 4: return f"5: 1 {symbols['G_f']} + 1.1 {symbols['I']}"
+    
+    elif stage == "2":
+        if index == 0: return f"6: 1.35 {symbols['G_f']} + 1.35 {symbols['G_c']} (γ_d applied)"
+        elif index == 1: return f"7: 1.2 {symbols['G_f']} + 1.2 {symbols['G_c']} + 1.5 {symbols['Q_w']} + 1.5 {symbols['Q_m']} + 1.5 {symbols['Q_h']} + 1 {symbols['W_s']} + 1.5 {symbols['F_w']} + 1.5 {symbols['Q_x']} + {symbols['P_c']} (γ_d applied)"
+        elif index == 2: return f"8: 1 {symbols['G_f']} + 1 {symbols['G_c']} + 1.1 {symbols['I']}"
+    
+    elif stage == "3":
+        if index == 0: return f"9: 1.35 {symbols['G_f']} + 1.35 {symbols['G_c']} (γ_d applied)"
+        elif index == 1: return f"10: 1.2 {symbols['G_f']} + 1.2 {symbols['G_c']} + 1.5 {symbols['Q_w']} + 1.5 {symbols['Q_m']} + 1.5 {symbols['Q_h']} + 1 {symbols['W_s']} + 1.5 {symbols['F_w']} + 1.5 {symbols['Q_x']} + {symbols['P_c']} (γ_d applied)"
+        elif index == 2: return f"11: 1.2 {symbols['G_f']} + 1.2 {symbols['G_c']} + 1.0 {symbols['W_u']}"
+        elif index == 3: return f"12: 1 {symbols['G_f']} + 1 {symbols['G_c']} + 1.1 {symbols['I']}"
+    
+    return f"Combination {index+1}"
 
 def display_results_in_streamlit(results):
     """Display results in Streamlit with proper formatting."""
+    if not isinstance(results, dict):
+        st.error("Invalid results format")
+        return
+        
     for stage in ["1", "2", "3"]:
-        if stage in results:
-            data = results[stage]
+        if stage not in results:
+            continue
             
-            st.subheader(f"Stage {stage}: {data['description']}")
+        data = results.get(stage, {})
+        if not data or not isinstance(data, dict):
+            st.error(f"Invalid data format for stage {stage}")
+            continue
             
-            # Critical Members
-            st.markdown(f"**Critical Members (γ_d = 1.3)**")
-            critical_data = []
-            for row in data['critical']:
-                critical_data.append([
-                    format_math_symbols(row[0]),
-                    float(row[1]),
-                    float(row[2])
-                ])
-            
-            # Display as table with markdown
+        description = data.get("description", f"Stage {stage}")
+        critical = data.get("critical", [])
+        non_critical = data.get("non_critical", [])
+        
+        st.subheader(f"Stage {stage}: {description}")
+        
+        # Critical Members
+        st.markdown(f"**Critical Members (γ_d = 1.3)**")
+        if not isinstance(critical, list):
+            st.error("Invalid critical combinations format")
+        else:
             st.markdown("| Combination | Vertical Load (kN/m²) | Horizontal Load (kN/m or kN/m²) |")
             st.markdown("|------------|----------------------|--------------------------------|")
-            for row in critical_data:
-                st.markdown(f"| {row[0]} | {row[1]:.2f} | {row[2]:.2f} |")
-            
-            # Non-Critical Members
-            st.markdown(f"**Non-Critical Members (γ_d = 1.0)**")
-            non_critical_data = []
-            for row in data['non_critical']:
-                non_critical_data.append([
-                    format_math_symbols(row[0]),
-                    float(row[1]),
-                    float(row[2])
-                ])
-            
-            # Display as table with markdown
+            for i, (vertical, horizontal) in enumerate(critical):
+                combo_text = format_combination_text(stage, i, vertical, horizontal, 1.3)
+                st.markdown(f"| {combo_text} | {vertical:.2f} | {horizontal:.2f} |")
+        
+        # Non-Critical Members
+        st.markdown(f"**Non-Critical Members (γ_d = 1.0)**")
+        if not isinstance(non_critical, list):
+            st.error("Invalid non-critical combinations format")
+        else:
             st.markdown("| Combination | Vertical Load (kN/m²) | Horizontal Load (kN/m or kN/m²) |")
             st.markdown("|------------|----------------------|--------------------------------|")
-            for row in non_critical_data:
-                st.markdown(f"| {row[0]} | {row[1]:.2f} | {row[2]:.2f} |")
+            for i, (vertical, horizontal) in enumerate(non_critical):
+                combo_text = format_combination_text(stage, i, vertical, horizontal, 1.0)
+                st.markdown(f"| {combo_text} | {vertical:.2f} | {horizontal:.2f} |")
+
+def generate_pdf_report(inputs, results, project_number, project_name):
+    """Generate PDF report."""
+    # PDF generation code would go here
+    # Return a bytes object with the PDF data
+    return None  # Placeholder - implement actual PDF generation
 
 def main():
     st.set_page_config(page_title="Load Combination Calculator", layout="wide")
@@ -165,38 +195,35 @@ def main():
         }
         
         # Compute results
+        results = {}
         stages = {
             "1": {"Q_w": Q_w1, "description": "Prior to concrete placement"},
             "2": {"Q_w": Q_w2, "description": "During concrete placement"},
             "3": {"Q_w": Q_w3, "description": "After concrete placement"}
         }
 
-        results = {}
         for stage, data in stages.items():
             Q_w = data["Q_w"]
+            
             # Critical Members (γ_d = 1.3)
             critical_combinations = compute_combinations(
                 G_f, inputs['G_c'], Q_w, Q_m, Q_h, W_s, W_u,
                 F_w, Q_x, P_c, I, stage, gamma_d=1.3
             )
-            critical_table = display_combinations(critical_combinations, stage, "Critical", 1.3)
-
+            
             # Non-Critical Members (γ_d = 1.0)
             non_critical_combinations = compute_combinations(
                 G_f, inputs['G_c'], Q_w, Q_m, Q_h, W_s, W_u,
                 F_w, Q_x, P_c, I, stage, gamma_d=1.0
             )
-            non_critical_table = display_combinations(non_critical_combinations, stage, "Non-Critical", 1.0)
 
-            # Store results for PDF
             results[stage] = {
                 "description": data["description"],
-                "Q_w": Q_w,
-                "critical": critical_table,
-                "non_critical": non_critical_table
+                "critical": critical_combinations,
+                "non_critical": non_critical_combinations
             }
         
-        # Display results in Streamlit with proper formatting
+        # Display results
         st.header("Load Combination Results")
         display_results_in_streamlit(results)
         
