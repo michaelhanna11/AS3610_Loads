@@ -36,7 +36,6 @@ def compute_combinations(G_f, G_c, Q_w, Q_m, Q_h, W_s, W_u, F_w, Q_x, P_c, I, st
     combinations = []
 
     if stage == "1":
-        # Stage 1 combinations
         comb_1 = (1.35 * G_f, 0.0)
         comb_2 = (gamma_d * (1.2 * G_f + 1.5 * Q_w + 1.5 * Q_m + 1.0 * W_s), gamma_d * (1.5 * Q_h))
         comb_3 = (1.2 * G_f + 1.0 * W_u + 1.5 * F_w, 0.0)
@@ -45,7 +44,6 @@ def compute_combinations(G_f, G_c, Q_w, Q_m, Q_h, W_s, W_u, F_w, Q_x, P_c, I, st
         combinations = [comb_1, comb_2, comb_3, comb_4, comb_5]
     
     elif stage == "2":
-        # Stage 2 combinations
         comb_6 = (gamma_d * (1.35 * G_f + 1.35 * G_c), 0.0)
         comb_7 = (gamma_d * (1.2 * G_f + 1.2 * G_c + 1.5 * Q_w + 1.5 * Q_m + 1.0 * W_s + 1.5 * F_w + 1.5 * Q_x + 1.0 * P_c), 
                  gamma_d * (1.5 * Q_h))
@@ -53,7 +51,6 @@ def compute_combinations(G_f, G_c, Q_w, Q_m, Q_h, W_s, W_u, F_w, Q_x, P_c, I, st
         combinations = [comb_6, comb_7, comb_8]
     
     elif stage == "3":
-        # Stage 3 combinations
         comb_9 = (gamma_d * (1.35 * G_f + 1.35 * G_c), 0.0)
         comb_10 = (gamma_d * (1.2 * G_f + 1.2 * G_c + 1.5 * Q_w + 1.5 * Q_m + 1.0 * W_s + 1.5 * F_w + 1.5 * Q_x + 1.0 * P_c),
                   gamma_d * (1.5 * Q_h))
@@ -135,7 +132,7 @@ def generate_pdf_report(inputs, results, project_number, project_name):
         spaceAfter=12
     )
     
-    subtitle_style = ParagraphStyle
+    subtitle_style = ParagraphStyle(
         name='Subtitle',
         parent=styles['Normal'],
         fontSize=10,
@@ -201,7 +198,7 @@ def generate_pdf_report(inputs, results, project_number, project_name):
     project_info = f"""
     <b>Project:</b> {project_name}<br/>
     <b>Number:</b> {project_number}<br/>
-    <b>Date:</b> {datetime.now().strftime('%d %B %Y')}
+    <b>Date:</強調>{datetime.now().strftime('%d %B %Y')}
     """
     elements.append(Paragraph(project_info, normal_style))
     elements.append(Spacer(1, 15*mm))
@@ -293,7 +290,7 @@ def generate_pdf_report(inputs, results, project_number, project_name):
                 Paragraph(f"{horizontal:.2f}", table_cell_center_style)
             ])
         
-        critical_table = Table(critical_data, colWidths=[100*mm, 40*mm, 50*mm])
+        critical_table = Table(critical_data, colWidths=[100*mm,  ذکر40*mm, 50*mm])
         critical_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
@@ -402,7 +399,7 @@ def main():
         reinforcement_percentage = st.number_input("Reinforcement percentage (%)", value=2.0, step=0.5)
         
         st.header("Load Parameters")
-        Q_w1 = st.number_input "Workers & equipment for Stage 1 (Q_w1, kN/m²)", value=1.0, step=0.1)
+        Q_w1 = st.number_input("Workers & equipment for Stage 1 (Q_w1, kN/m²)", value=1.0, step=0.1)
         Q_w2 = st.number_input("Workers, equipment & placement for Stage 2 (Q_w2, kN/m²)", value=2.0, step=0.1)
         Q_w3 = st.number_input("Workers & equipment for Stage 3 (Q_w3, kN/m²)", value=1.0, step=0.1)
         Q_m = st.number_input("Stacked materials (Q_m, kN/m²)", value=2.5, step=0.1)
