@@ -100,7 +100,7 @@ def create_results_dataframe(combinations, stage, gamma_d):
             "γ_d": f"{gamma_d:.1f}"
         })
     return pd.DataFrame(data)
-
+    
 def download_logo():
     """Download company logo for PDF report."""
     logo_file = None
@@ -193,7 +193,6 @@ def generate_pdf_report(inputs, results, project_number, project_name):
     )
     
     elements = []
-    
     # Header with logo and company info
     logo_file = download_logo()
     if logo_file:
@@ -289,7 +288,7 @@ def generate_pdf_report(inputs, results, project_number, project_name):
     
     company_info = f"""<b>{COMPANY_NAME}</b><br/>{COMPANY_ADDRESS}"""
     elements.append(Paragraph(company_info, normal_style))
-    elements.append(Spacer(1, 15*mm))
+    elements.append(Spacer(1, 5*mm))
     
     # Results section
     elements.append(Paragraph("Load Combination Results", heading1_style))
@@ -374,6 +373,21 @@ def generate_pdf_report(inputs, results, project_number, project_name):
         
         if stage != "3":
             elements.append(PageBreak())
+
+        # Header with logo and company info
+    logo_file = download_logo()
+    if logo_file:
+        try:
+            logo = Image(logo_file, width=40*mm, height=15*mm)
+            logo.hAlign = 'LEFT'
+            elements.append(logo)
+        except:
+            pass
+    
+    company_info = f"""<b>{COMPANY_NAME}</b><br/>{COMPANY_ADDRESS}"""
+    elements.append(Paragraph(company_info, normal_style))
+    elements.append(Spacer(1, 5*mm))
+
     
     # Footer
     def add_footer(canvas, doc):
