@@ -1,342 +1,505 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.optimize import fsolve
-from reportlab.lib.pagesizes import A4
-from reportlab.lib import colors
-from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_LEFT, TA_CENTER
-import requests
+
+import streamlit as st
 import os
 import io
 from datetime import datetime
-import streamlit as st
-import warnings
+import requests
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_JUSTIFY, TA_LEFT, TA_CENTER
+import pandas as pd
+import base64
 
-# Suppress runtime warnings (including fsolve convergence warnings)
-warnings.filterwarnings("ignore", category=RuntimeWarning)
-
-# Program version
+# Program details
 PROGRAM_VERSION = "1.0 - 2025"
-PROGRAM = "Rise Rate Calculator to AS 3610.2:2023"
+PROGRAM = "Load Combination Calculator to AS 3610.2 (Int):2023"
 
 # Company details
 COMPANY_NAME = "tekhne Consulting Engineers"
-COMPANY_ADDRESS = "   "  # Placeholder; update with actual address if needed
+COMPANY_ADDRESS = ""
 
 # Logo URLs
 LOGO_URL = "https://drive.google.com/uc?export=download&id=1VebdT2loVGX57noP9t2GgQhwCNn8AA3h"
 FALLBACK_LOGO_URL = "https://onedrive.live.com/download?cid=A48CC9068E3FACE0&resid=A48CC9068E3FACE0%21s252b6fb7fcd04f53968b2a09114d33ed"
 
-def calculate_rate_of_rise(Pmax, D, H_form, T, C1, C2):
-    K = (36 / (T + 16))**2
-    def pressure_equation(R):
-        if R <= 0:  # Handle negative or zero R
-            return 1e6  # Large penalty
-        term1 = C1 * np.sqrt(R)
-        # Smooth transition near H_form = C1 * √R
-        if H_form <= term1:
-            return D * H_form - Pmax
-        return D * (term1 + C2 * K * np.sqrt(H_form - term1)) - Pmax
-    # Refined initial guess
-    R_guess = max(0.1, (Pmax / D - C2 * K * np.sqrt(H_form)) / C1)**2 if (Pmax / D - C2 * K * np.sqrt(H_form)) > 0 else 0.1
-    R_solution, info, ier, msg = fsolve(pressure_equation, R_guess, xtol=1e-8, maxfev=2000, full_output=True)
-    if ier != 1:  # Explicitly print if fsolve fails
-        st.warning(f"fsolve warning at T={T}°C: {msg}")
-    return R_solution[0] if 0 < R_solution[0] <= 10 else float('nan')
+def calculate_concrete_load(thickness, reinforcement_percentage):
+    """Calculate G_c in kN/m² based on concrete thickness and reinforcement percentage."""
+    base_density = 24  # kN/m³
+    reinforcement_load = 0.5 * reinforcement_percentage  # kN/m²
+    G_c = base_density * thickness + reinforcement_load * thickness
+    return G_c
 
-def build_elements(inputs, max_R, y_max, project_number, project_name):
-    """Build the document elements for the PDF."""
-    styles = getSampleStyleSheet()
+def compute_combinations(G_f, G_c, Q_w, Q_m, Q_h, W_s, W_u, F_w, Q_x, P_c, I, stage, gamma_d):
+    """Compute load combinations for a given stage and gamma_d."""
+    combinations = []
 
-    # Custom styles (adjusted for single-page fit)
-    title_style = ParagraphStyle(name='TitleStyle', parent=styles['Title'], fontSize=14, spaceAfter=8, alignment=TA_CENTER)
-    subtitle_style = ParagraphStyle(name='SubtitleStyle', parent=styles['Normal'], fontSize=10, spaceAfter=8, alignment=TA_CENTER)
-    heading_style = ParagraphStyle(name='HeadingStyle', parent=styles['Heading2'], fontSize=12, spaceAfter=6)
-    normal_style = ParagraphStyle(name='NormalStyle', parent=styles['Normal'], fontSize=9, spaceAfter=6)
-    table_header_style = ParagraphStyle(name='TableHeaderStyle', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold', alignment=TA_LEFT)
-    table_cell_style = ParagraphStyle(name='TableCellStyle', parent=styles['Normal'], fontSize=8, alignment=TA_LEFT, leading=8)
-    table_style = TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('FONTSIZE', (0, 1), (-1, -1), 8),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-    ])
+    if stage == "1":
+        comb_1 = (1.35 * G_f, 0.0)
+        comb_2 = (gamma_d * (1.2 * G_f + 1.5 * Q_w + 1.5 * Q_m + 1.0 * W_s), gamma_d * (1.5 * Q_h))
+        comb_3 = (1.2 * G_f + 1.0 * W_u + 1.5 * F_w, 0.0)
+        comb_4 = (0.9 * G_f + 1.0 * W_u + 1.5 * F_w, 0.0)
+        comb_5 = (1.0 * G_f + 1.1 * I, 0.0)
+        combinations = [comb_1, comb_2, comb_3, comb_4, comb_5]
+    
+    elif stage == "2":
+        comb_6 = (gamma_d * (1.35 * G_f + 1.35 * G_c), 0.0)
+        comb_7 = (gamma_d * (1.2 * G_f + 1.2 * G_c + 1.5 * Q_w + 1.5 * Q_m + 1.0 * W_s + 1.5 * F_w + 1.5 * Q_x + 1.0 * P_c), 
+                 gamma_d * (1.5 * Q_h))
+        comb_8 = (1.0 * G_f + 1.0 * G_c + 1.1 * I, 0.0)
+        combinations = [comb_6, comb_7, comb_8]
+    
+    elif stage == "3":
+        comb_9 = (gamma_d * (1.35 * G_f + 1.35 * G_c), 0.0)
+        comb_10 = (gamma_d * (1.2 * G_f + 1.2 * G_c + 1.5 * Q_w + 1.5 * Q_m + 1.0 * W_s + 1.5 * F_w + 1.5 * Q_x + 1.0 * P_c),
+                  gamma_d * (1.5 * Q_h))
+        comb_11 = (1.2 * G_f + 1.2 * G_c + 1.0 * W_u, 0.0)
+        comb_12 = (1.0 * G_f + 1.0 * G_c + 1.1 * I, 0.0)
+        combinations = [comb_9, comb_10, comb_11, comb_12]
+    
+    return combinations
 
-    elements = []
+def get_combination_description(stage, index):
+    """Get the description text for each combination with proper formatting."""
+    if stage == "1":
+        descriptions = [
+            "1: 1.35G<sub>f</sub>",
+            "2: 1.2G<sub>f</sub> + 1.5Q<sub>w</sub> + 1.5Q<sub>m</sub> + 1.5Q<sub>h</sub> + 1W<sub>s</sub>",
+            "3: 1.2G<sub>f</sub> + 1W<sub>u</sub> + 1.5F<sub>w</sub>",
+            "4: 0.9G<sub>f</sub> + 1W<sub>u</sub> + 1.5F<sub>w</sub>",
+            "5: 1G<sub>f</sub> + 1.1I"
+        ]
+    elif stage == "2":
+        descriptions = [
+            "6: 1.35G<sub>f</sub> + 1.35G<sub>c</sub>",
+            "7: 1.2G<sub>f</sub> + 1.2G<sub>c</sub> + 1.5Q<sub>w</sub> + 1.5Q<sub>m</sub> + 1.5Q<sub>h</sub> + 1W<sub>s</sub> + 1.5F<sub>w</sub> + 1.5Q<sub>x</sub> + P<sub>c</sub>",
+            "8: 1G<sub>f</sub> + 1G<sub>c</sub> + 1.1I"
+        ]
+    elif stage == "3":
+        descriptions = [
+            "9: 1.35G<sub>f</sub> + 1.35G<sub>c</sub>",
+            "10: 1.2G<sub>f</sub> + 1.2G<sub>c</sub> + 1.5Q<sub>w</sub> + 1.5Q<sub>m</sub> + 1.5Q<sub>h</sub> + 1W<sub>s</sub> + 1.5F<sub>w</sub> + 1.5Q<sub>x</sub> + P<sub>c</sub>",
+            "11: 1.2G<sub>f</sub> + 1.2G<sub>c</sub> + 1.0W<sub>u</sub>",
+            "12: 1G<sub>f</sub> + 1G<sub>c</sub> + 1.1I"
+        ]
+    return descriptions[index] if index < len(descriptions) else f"Combination {index+1}"
 
-    # Download logo silently
+def create_results_dataframe(combinations, stage, gamma_d):
+    """Create a pandas DataFrame for the results."""
+    data = []
+    for i, (vertical, horizontal) in enumerate(combinations):
+        desc = get_combination_description(stage, i).replace("<sub>", "").replace("</sub>", "")
+        data.append({
+            "Combination": desc,
+            "Vertical Load (kN/m²)": f"{vertical:.2f}",
+            "Horizontal Load (kN/m or kN/m²)": f"{horizontal:.2f}",
+            "γ_d": f"{gamma_d:.1f}"
+        })
+    return pd.DataFrame(data)
+    
+def download_logo():
+    """Download company logo for PDF report."""
     logo_file = None
     for url in [LOGO_URL, FALLBACK_LOGO_URL]:
         try:
-            response = requests.get(url, stream=True, allow_redirects=True, timeout=10)
-            content_type = response.headers.get('Content-Type', '')
-            if 'image' not in content_type.lower():
-                continue
-            response.raise_for_status()
-            logo_file = "logo.png"
-            with open(logo_file, 'wb') as f:
-                f.write(response.content)
-            break
+            response = requests.get(url, stream=True, timeout=10)
+            if response.status_code == 200:
+                logo_file = "company_logo.png"
+                with open(logo_file, 'wb') as f:
+                    f.write(response.content)
+                break
         except Exception:
             continue
-    if not logo_file:
-        pass  # Silently proceed with placeholder
+    return logo_file if logo_file and os.path.exists(logo_file) else None
 
-    # Header
-    company_text = f"""
-    <b>{COMPANY_NAME}</b><br/>
-    {COMPANY_ADDRESS}
-    """
-    company_paragraph = Paragraph(company_text, normal_style)
-
-    if logo_file and os.path.exists(logo_file):
-        try:
-            logo = Image(logo_file, width=50*mm, height=20*mm)
-        except Exception:
-            logo = Paragraph("[Logo Placeholder]", normal_style)
-    else:
-        logo = Paragraph("[Logo Placeholder]", normal_style)
-
-    header_data = [[logo, company_paragraph]]
-    header_table = Table(header_data, colWidths=[60*mm, 120*mm])
-    header_table.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
-    ]))
-    elements.append(header_table)
-    elements.append(Spacer(1, 4*mm))
-
-    # Title
-    elements.append(Paragraph("Rise Rate Calculation Report to AS 3610.2:2023", title_style))
-
-    # Project Details
-    project_details = f"""
-    Project Number: {project_number}<br/>
-    Project Name: {project_name}<br/>
-    Date: {datetime.now().strftime('%B %d, %Y')}
-    """
-    elements.append(Paragraph(project_details, subtitle_style))
-    elements.append(Spacer(1, 2*mm))
-
-    # Input Parameters Section
-    elements.append(Paragraph("Input Parameters", heading_style))
-    input_data_raw = [
-        ["Parameter", "Value"],
-        ["Wet Concrete Density (kN/m³)", f"{inputs['D']:.2f}"],
-        ["Min Temperature (°C)", f"{inputs['T_min']:.1f}"],
-        ["Max Temperature (°C)", f"{inputs['T_max']:.1f}"],
-        ["Total Concrete Height (m)", f"{inputs['H_concrete']:.2f}"],
-        ["Total Formwork Height (m)", f"{inputs['H_form']:.2f}"],
-        ["C2 Coefficient", f"{inputs['C2']:.2f}"],
-        ["Plan Width (m)", f"{inputs['W']:.2f}"],
-        ["Plan Length (m)", f"{inputs['L']:.2f}"],
-        ["Maximum Concrete Pressure (kN/m²)", f"{inputs['Pmax']:.2f}"],
-        ["Structure Type (C1)", f"{inputs['structure_type']} ({inputs['C1']:.1f})"],
+def generate_pdf_report(inputs, results, project_number, project_name):
+    """Generate a professional PDF report with company branding and header on all pages."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, 
+                          leftMargin=15*mm, rightMargin=15*mm,
+                          topMargin=30*mm, bottomMargin=15*mm)  # Increased top margin for header
+    
+    styles = getSampleStyleSheet()
+    
+    # Custom styles
+    title_style = ParagraphStyle(
+        name='Title',
+        parent=styles['Title'],
+        fontSize=16,
+        leading=20,
+        alignment=TA_CENTER,
+        spaceAfter=12
+    )
+    
+    subtitle_style = ParagraphStyle(
+        name='Subtitle',
+        parent=styles['Normal'],
+        fontSize=10,
+        alignment=TA_CENTER,
+        spaceAfter=15
+    )
+    
+    heading1_style = ParagraphStyle(
+        name='Heading1',
+        parent=styles['Heading1'],
+        fontSize=14,
+        spaceBefore=20,
+        spaceAfter=10
+    )
+    
+    heading2_style = ParagraphStyle(
+        name='Heading2',
+        parent=styles['Heading2'],
+        fontSize=12,
+        spaceBefore=15,
+        spaceAfter=8
+    )
+    
+    normal_style = ParagraphStyle(
+        name='Normal',
+        parent=styles['Normal'],
+        fontSize=10,
+        leading=12,
+        spaceAfter=8
+    )
+    
+    table_header_style = ParagraphStyle(
+        name='TableHeader',
+        parent=styles['Normal'],
+        fontSize=10,
+        leading=12,
+        fontName='Helvetica-Bold',
+        alignment=TA_CENTER
+    )
+    
+    table_cell_style = ParagraphStyle(
+        name='TableCell',
+        parent=styles['Normal'],
+        fontSize=9,
+        leading=11,
+        alignment=TA_LEFT
+    )
+    
+    table_cell_center_style = ParagraphStyle(
+        name='TableCellCenter',
+        parent=styles['Normal'],
+        fontSize=9,
+        leading=11,
+        alignment=TA_CENTER
+    )
+    
+    elements = []
+    
+    # Title and project info
+    elements.append(Paragraph("Load Combination Report for Falsework Design", title_style))
+    elements.append(Paragraph(f"to AS 3610.2 (Int):2023 - Strength Limit State", subtitle_style))
+    
+    # Cleaned-up project_info string
+    project_info = (
+        f"<b>Project:</b> {project_name}<br/>"
+        f"<b>Number:</b> {project_number}<br/>"
+        f"<b>Date:</b> {datetime.now().strftime('%d %B %Y')}"
+    )
+    elements.append(Paragraph(project_info, normal_style))
+    elements.append(Spacer(1, 15*mm))
+    
+    # Input Parameters section
+    elements.append(Paragraph("Input Parameters", heading1_style))
+    
+    input_data = [
+        ["Parameter", "Value", "", "Parameter", "Value"]
     ]
-    input_data = []
-    for i, row in enumerate(input_data_raw):
-        if i == 0:  # Header row
-            input_data.append([
-                Paragraph(row[0], table_header_style),
-                Paragraph(row[1], table_header_style)
-            ])
-        else:  # Data rows
-            input_data.append([
-                Paragraph(row[0], table_cell_style),
-                Paragraph(row[1], table_cell_style)
-            ])
-    input_table = Table(input_data, colWidths=[100*mm, 80*mm])
-    input_table.setStyle(table_style)
+    
+    input_params = [
+        ("Formwork self-weight (G<sub>f</sub>)", f"{inputs['G_f']:.2f} kN/m²"),
+        ("Concrete thickness", f"{inputs['thickness']:.2f} m"),
+        ("Reinforcement percentage", f"{inputs['reinforcement_percentage']:.1f}%"),
+        ("Concrete load (G<sub>c</sub>)", f"{inputs['G_c']:.2f} kN/m²"),
+        ("Workers & equipment - Stage 1 (Q<sub>w1</sub>)", f"{inputs['Q_w1']:.2f} kN/m²"),
+        ("Workers & equipment - Stage 2 (Q<sub>w2</sub>)", f"{inputs['Q_w2']:.2f} kN/m²"),
+        ("Workers & equipment - Stage 3 (Q<sub>w3</sub>)", f"{inputs['Q_w3']:.2f} kN/m²"),
+        ("Stacked materials (Q<sub>m</sub>)", f"{inputs['Q_m']:.2f} kN/m²"),
+        ("Horizontal imposed load (Q<sub>h</sub>)", f"{inputs['Q_h']:.2f} kN/m"),
+        ("Service wind load (W<sub>s</sub>)", f"{inputs['W_s']:.2f} kN/m²"),
+        ("Ultimate wind load (W<sub>u</sub>)", f"{inputs['W_u']:.2f} kN/m²"),
+        ("Flowing water load (F_w)", f"{inputs['F_w']:.2f} kN/m²"),
+        ("Other actions (Q<sub>x</sub>)", f"{inputs['Q_x']:.2f} kN/m²"),
+        ("Lateral concrete pressure (P<sub>c</sub>)", f"{inputs['P_c']:.2f} kN/m²"),
+        ("Impact load (I)", f"{inputs['I']:.2f} kN/m²")
+    ]
+    
+    for i in range(0, len(input_params), 2):
+        row = []
+        row.append(Paragraph(input_params[i][0], table_cell_style))
+        row.append(Paragraph(input_params[i][1], table_cell_center_style))
+        row.append("")
+        if i+1 < len(input_params):
+            row.append(Paragraph(input_params[i+1][0], table_cell_style))
+            row.append(Paragraph(input_params[i+1][1], table_cell_center_style))
+        else:
+            row.append("")
+            row.append("")
+        input_data.append(row)
+    
+    input_table = Table(input_data, colWidths=[60*mm, 30*mm, 10*mm, 60*mm, 30*mm])
+    input_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+        ('ALIGN', (4, 0), (4, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+    ]))
     elements.append(input_table)
-    elements.append(Spacer(1, 4*mm))
-
-    # Results Section
-    elements.append(Paragraph("Results", heading_style))
-    elements.append(Paragraph(f"Maximum Calculated Rate of Rise: {max_R:.2f} m/hr", normal_style))
-    elements.append(Paragraph(f"Y-axis Maximum Set to: {y_max:.2f} m/hr", normal_style))
-    elements.append(Spacer(1, 4*mm))
-
-    # Add Graph
-    elements.append(Paragraph("Rate of Rise vs Temperature Graph", heading_style))
-    if os.path.exists('graph.png'):
-        graph_image = Image('graph.png', width=160*mm, height=60*mm)
-        elements.append(graph_image)
-    else:
-        elements.append(Paragraph("[Graph Placeholder - Unable to Load Graph]", normal_style))
-
-    return elements
-
-def generate_pdf_report(inputs, max_R, y_max, project_number, project_name):
-    """Generate the PDF report with a two-pass approach for page numbering."""
-    try:
-        # First pass: Build the document to count the total number of pages
-        temp_buffer = io.BytesIO()
-        temp_doc = SimpleDocTemplate(
-            temp_buffer,
-            pagesize=A4,
-            leftMargin=15*mm,
-            rightMargin=15*mm,
-            topMargin=15*mm,
-            bottomMargin=15*mm
-        )
-        elements = build_elements(inputs, max_R, y_max, project_number, project_name)
-
-        def temp_footer(canvas, doc):
-            canvas.saveState()
-            canvas.setFont('Helvetica', 10)
-            page_num = canvas.getPageNumber()
-            canvas.drawCentredString(
-                doc.pagesize[0] / 2.0,
-                10 * mm,
-                f"{PROGRAM} {PROGRAM_VERSION} | tekhne © | Page {page_num}"
-            )
-            canvas.restoreState()
-
-        temp_doc.build(elements, onFirstPage=temp_footer, onLaterPages=temp_footer)
-        total_pages = temp_doc.page
-
-        # Second pass: Build the final document with the correct total page number
-        pdf_buffer = io.BytesIO()
-        doc = SimpleDocTemplate(
-            pdf_buffer,
-            pagesize=A4,
-            leftMargin=15*mm,
-            rightMargin=15*mm,
-            topMargin=15*mm,
-            bottomMargin=15*mm
-        )
-        elements = build_elements(inputs, max_R, y_max, project_number, project_name)
-
-        def final_footer(canvas, doc):
-            canvas.saveState()
-            canvas.setFont('Helvetica', 10)
-            page_num = canvas.getPageNumber()
-            footer_text = f"{PROGRAM} {PROGRAM_VERSION} | tekhne © | Page {page_num}/{total_pages}"
-            canvas.drawCentredString(
-                doc.pagesize[0] / 2.0,
-                10 * mm,
-                footer_text
-            )
-            canvas.restoreState()
-
-        doc.build(elements, onFirstPage=final_footer, onLaterPages=final_footer)
-        pdf_buffer.seek(0)
-        return pdf_buffer.getvalue()
-
-    except Exception as e:
-        st.error(f"Error generating PDF: {e}")
-        return None
+    elements.append(PageBreak())
+    
+    # Results section
+    elements.append(Paragraph("Load Combination Results", heading1_style))
+    elements.append(Paragraph("Strength Limit State - AS 3610.2 (Int):2023 Table 3.3.1", subtitle_style))
+    elements.append(Spacer(1, 10*mm))
+    
+    for stage in ["1", "2", "3"]:
+        if stage not in results:
+            continue
+            
+        data = results[stage]
+        stage_title = f"Stage {stage}: {data['description']}"
+        elements.append(Paragraph(stage_title, heading2_style))
+        elements.append(Spacer(1, 5*mm))
+        
+        # Critical Members
+        elements.append(Paragraph("Critical Members (γ<sub>d</sub> = 1.3)", styles['Heading3']))
+        
+        critical_data = [[
+            Paragraph("Combination", table_header_style),
+            Paragraph("Vertical Load<br/>(kN/m²)", table_header_style),
+            Paragraph("Horizontal Load<br/>(kN/m or kN/m²)", table_header_style)
+        ]]
+        
+        for i, (vertical, horizontal) in enumerate(data['critical']):
+            desc = get_combination_description(stage, i)
+            critical_data.append([
+                Paragraph(desc, table_cell_style),
+                Paragraph(f"{vertical:.2f}", table_cell_center_style),
+                Paragraph(f"{horizontal:.2f}", table_cell_center_style)
+            ])
+        
+        critical_table = Table(critical_data, colWidths=[100*mm, 40*mm, 50*mm])
+        critical_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ]))
+        elements.append(critical_table)
+        elements.append(Spacer(1, 10*mm))
+        
+        # Non-Critical Members
+        elements.append(Paragraph("Non-Critical Members (γ<sub>d</sub> = 1.0)", styles['Heading3']))
+        
+        non_critical_data = [[
+            Paragraph("Combination", table_header_style),
+            Paragraph("Vertical Load<br/>(kN/m²)", table_header_style),
+            Paragraph("Horizontal Load<br/>(kN/m or kN/m²)", table_header_style)
+        ]]
+        
+        for i, (vertical, horizontal) in enumerate(data['non_critical']):
+            desc = get_combination_description(stage, i)
+            non_critical_data.append([
+                Paragraph(desc, table_cell_style),
+                Paragraph(f"{vertical:.2f}", table_cell_center_style),
+                Paragraph(f"{horizontal:.2f}", table_cell_center_style)
+            ])
+        
+        non_critical_table = Table(non_critical_data, colWidths=[100*mm, 40*mm, 50*mm])
+        non_critical_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ]))
+        elements.append(non_critical_table)
+        
+        if stage != "3":
+            elements.append(PageBreak())
+    
+    # Header and Footer drawing function
+    def draw_header_footer(canvas, doc):
+        canvas.saveState()
+        
+        # Draw Header
+        logo_file = download_logo()
+        if logo_file:
+            try:
+                logo = Image(logo_file, width=40*mm, height=15*mm)
+                logo.drawOn(canvas, 15*mm, A4[1] - 25*mm)  # Position logo at top-left
+            except:
+                pass
+        
+        canvas.setFont('Helvetica-Bold', 10)
+        canvas.drawString(60*mm, A4[1] - 15*mm, COMPANY_NAME)
+        canvas.setFont('Helvetica', 8)
+        canvas.drawString(60*mm, A4[1] - 20*mm, COMPANY_ADDRESS)
+        
+        # Draw Footer
+        canvas.setFont('Helvetica', 8)
+        footer_text = f"{PROGRAM} {PROGRAM_VERSION} | {COMPANY_NAME} © | Page {doc.page}"
+        canvas.drawCentredString(A4[0]/2.0, 10*mm, footer_text)
+        
+        canvas.restoreState()
+    
+    # Build the document with header and footer on all pages
+    doc.build(elements, onFirstPage=draw_header_footer, onLaterPages=draw_header_footer)
+    buffer.seek(0)
+    return buffer
 
 def main():
-    st.title("Rise Rate Calculator to AS 3610.2:2023")
+    st.set_page_config(page_title="Load Combination Calculator", layout="wide")
+    
+    # Initialize session state to preserve results
+    if 'results' not in st.session_state:
+        st.session_state.results = None
+    if 'inputs' not in st.session_state:
+        st.session_state.inputs = None
+    
+    st.title("Load Combination Calculator for AS 3610.2 (Int):2023")
+    st.markdown("""
+    This calculator generates load combinations for formwork design as per AS 3610.2 (Int):2023, 
+    specifically following the Strength Limit State requirements outlined in Table 3.3.1.
+    """)
+    
+    with st.sidebar:
+        st.header("Project Details")
+        project_number = st.text_input("Project Number", "PRJ-001")
+        project_name = st.text_input("Project Name", "Sample Project")
+        
+        st.header("Basic Parameters")
+        G_f = st.number_input("Formwork self-weight (G_f, kN/m²)", value=0.6, step=0.1)
+        thickness = st.number_input("Concrete thickness (m)", value=0.2, step=0.05)
+        reinforcement_percentage = st.number_input("Reinforcement percentage (%)", value=2.0, step=0.5)
+        
+        st.header("Load Parameters")
+        Q_w1 = st.number_input("Workers & equipment for Stage 1 (Q_w1, kN/m²)", value=1.0, step=0.1)
+        Q_w2 = st.number_input("Workers, equipment & placement for Stage 2 (Q_w2, kN/m²)", value=2.0, step=0.1)
+        Q_w3 = st.number_input("Workers & equipment for Stage 3 (Q_w3, kN/m²)", value=1.0, step=0.1)
+        Q_m = st.number_input("Stacked materials (Q_m, kN/m²)", value=2.5, step=0.1)
+        Q_h = st.number_input("Horizontal imposed load (Q_h, kN/m)", value=0.0, step=0.1)
+        W_s = st.number_input("Service wind load (W_s, kN/m²)", value=0.0, step=0.1)
+        W_u = st.number_input("Ultimate wind load (W_u, kN/m²)", value=0.0, step=0.1)
+        F_w = st.number_input("Flowing water load (F_w, kN/m²)", value=0.0, step=0.1)
+        Q_x = st.number_input("Other actions (Q_x, kN/m²)", value=0.0, step=0.1)
+        P_c = st.number_input("Lateral concrete pressure (P_c, kN/m²)", value=0.0, step=0.1)
+        I = st.number_input("Impact load (I, kN/m²)", value=0.0, step=0.1)
+        
+        if st.button("Calculate Load Combinations"):
+            inputs = {
+                'G_f': G_f,
+                'thickness': thickness,
+                'reinforcement_percentage': reinforcement_percentage,
+                'G_c': calculate_concrete_load(thickness, reinforcement_percentage),
+                'Q_w1': Q_w1,
+                'Q_w2': Q_w2,
+                'Q_w3': Q_w3,
+                'Q_m': Q_m,
+                'Q_h': Q_h,
+                'W_s': W_s,
+                'W_u': W_u,
+                'F_w': F_w,
+                'Q_x': Q_x,
+                'P_c': P_c,
+                'I': I
+            }
+            
+            # Compute results
+            results = {}
+            stages = {
+                "1": {"Q_w": Q_w1, "description": "Prior to concrete placement"},
+                "2": {"Q_w": Q_w2, "description": "During concrete placement"},
+                "3": {"Q_w": Q_w3, "description": "After concrete placement"}
+            }
 
-    # Collect project details using Streamlit widgets
-    st.header("Project Details")
-    project_number = st.text_input("Project Number", value="PRJ-001")
-    project_name = st.text_input("Project Name", value="Sample Project")
+            for stage, data in stages.items():
+                Q_w = data["Q_w"]
+                
+                # Critical Members (γ_d = 1.3)
+                critical_combinations = compute_combinations(
+                    G_f, inputs['G_c'], Q_w, Q_m, Q_h, W_s, W_u,
+                    F_w, Q_x, P_c, I, stage, gamma_d=1.3
+                )
+                
+                # Non-Critical Members (γ_d = 1.0)
+                non_critical_combinations = compute_combinations(
+                    G_f, inputs['G_c'], Q_w, Q_m, Q_h, W_s, W_u,
+                    F_w, Q_x, P_c, I, stage, gamma_d=1.0
+                )
 
-    # Collect inputs using Streamlit widgets
-    st.header("Input Parameters")
-    inputs = {}
-    inputs['D'] = st.number_input("Wet Concrete Density (kN/m³)", min_value=0.0, max_value=30.0, value=25.0, step=0.1)
-    inputs['T_min'] = st.number_input("Min Temperature (°C)", min_value=5.0, max_value=30.0, value=5.0, step=0.1)
-    inputs['T_max'] = st.number_input("Max Temperature (°C)", min_value=5.0, max_value=30.0, value=30.0, step=0.1)
-    inputs['H_concrete'] = st.number_input("Total Concrete Height (m)", min_value=0.0, max_value=50.0, value=3.0, step=0.1)
-    inputs['H_form'] = st.number_input("Total Formwork Height (m)", min_value=0.0, max_value=50.0, value=3.3, step=0.1)
-    inputs['C2'] = st.number_input("C2 Coefficient (e.g., 0.3, 0.45, 0.6)", min_value=0.0, max_value=1.0, value=0.45, step=0.01)
-    inputs['W'] = st.number_input("Plan Width (m)", min_value=0.0, max_value=100.0, value=2.0, step=0.1)
-    inputs['L'] = st.number_input("Plan Length (m)", min_value=0.0, max_value=100.0, value=3.0, step=0.1)
-    inputs['Pmax'] = st.number_input("Maximum Concrete Pressure (kN/m²)", min_value=0.0, max_value=1000.0, value=60.0, step=0.1)
-
-    # Determine structure type
-    inputs['C1'] = 1.5 if inputs['W'] <= 1.0 or inputs['L'] <= 1.0 else 1.0
-    inputs['structure_type'] = "column" if inputs['C1'] == 1.5 else "wall"
-    st.write(f"Assumed structure type: {inputs['structure_type']} (C1 = {inputs['C1']})")
-
-    # Validate inputs
-    try:
-        if not (0 < inputs['D'] <= 30):
-            raise ValueError("Density must be between 0 and 30 kN/m³")
-        if not (5 <= inputs['T_min'] <= inputs['T_max'] <= 30):
-            raise ValueError("Temperatures must be between 5 and 30°C, with T_min <= T_max")
-        if not (0 < inputs['H_concrete'] <= inputs['H_form'] <= 50):
-            raise ValueError("Heights must be positive, with concrete height <= formwork height <= 50 m")
-        if not (0 < inputs['C2'] <= 1.0):
-            raise ValueError("C2 coefficient must be between 0 and 1.0")
-        if not (0 < inputs['W'] <= 100 and 0 < inputs['L'] <= 100):
-            raise ValueError("Plan dimensions must be between 0 and 100 m")
-        if not (0 < inputs['Pmax'] <= inputs['D'] * inputs['H_form']):
-            raise ValueError(f"Pmax must be between 0 and hydrostatic limit ({inputs['D'] * inputs['H_form']:.2f} kN/m²)")
-    except ValueError as e:
-        st.error(str(e))
-        return
-
-    # Calculate R across temperature range
-    T_range = np.linspace(inputs['T_min'], inputs['T_max'], 50)
-    R_values = [calculate_rate_of_rise(inputs['Pmax'], inputs['D'], inputs['H_form'], T, inputs['C1'], inputs['C2']) for T in T_range]
-
-    # Debug: Display R at 5°C intervals
-    st.header("Rate of Rise (R) at 5°C Intervals")
-    for T in np.arange(inputs['T_min'], inputs['T_max'] + 1, 5):
-        if T <= inputs['T_max']:
-            R = calculate_rate_of_rise(inputs['Pmax'], inputs['D'], inputs['H_form'], T, inputs['C1'], inputs['C2'])
-            st.write(f"T = {T}°C, R = {R:.2f} m/hr" if not np.isnan(R) else f"T = {T}°C, R = NaN")
-
-    # Determine maximum R
-    max_R = np.nanmax(R_values)
-    y_max = max_R * 1.1
-
-    # Ensure old graph is deleted to force regeneration
-    if os.path.exists('graph.png'):
-        os.remove('graph.png')
-        st.write("Deleted existing graph.png to force regeneration.")
-
-    # Generate and display the graph with tekhne logo green (#00A859)
-    plt.figure(figsize=(10, 6))
-    st.write("Plotting graph with color #00A859 (tekhne green).")
-    plt.plot(T_range, R_values, color='#00A859', linestyle='-', label=f'Rate of Rise (Pmax = {inputs["Pmax"]} kN/m²)')
-    plt.xlabel('Temperature (°C)')
-    plt.ylabel('Rate of Rise (m/hr)')
-    plt.title(f'Rate of Rise vs Temperature - {project_name}\nD = {inputs["D"]} kN/m³, C2 = {inputs["C2"]}, P= {inputs["Pmax"]} kN/m²')
-    plt.grid(True)
-    plt.legend()
-    plt.ylim(0, y_max)
-    T_steps = np.arange(inputs['T_min'], inputs['T_max'] + 1, 5)
-    for T in T_steps:
-        if T <= inputs['T_max']:
-            R = calculate_rate_of_rise(inputs['Pmax'], inputs['D'], inputs['H_form'], T, inputs['C1'], inputs['C2'])
-            if not np.isnan(R):
-                plt.text(T, R + max_R * 0.02, f'{R:.2f}', fontsize=10, ha='center', va='bottom', color='black')
-    plt.savefig('graph.png', dpi=300, bbox_inches='tight')
-    st.image('graph.png', caption="Rate of Rise vs Temperature Graph")
-    plt.close()
-
-    # Generate PDF report
-    st.header("Generate Report")
-    if st.button("Generate PDF Report"):
-        pdf_data = generate_pdf_report(inputs, max_R, y_max, project_number, project_name)
-        if pdf_data:
-            pdf_filename = f"Rise_Rate_Calculation_Report_{project_name.replace(' ', '_')}.pdf"
-            st.download_button(
-                label="Download PDF Report",
-                data=pdf_data,
-                file_name=pdf_filename,
-                mime="application/pdf"
-            )
-            st.success(f"PDF report generated: {pdf_filename}")
-            st.write(f"Maximum calculated rate of rise: {max_R:.2f} m/hr")
-            st.write(f"Y-axis maximum set to: {y_max:.2f} m/hr")
+                results[stage] = {
+                    "description": data["description"],
+                    "critical": critical_combinations,
+                    "non_critical": non_critical_combinations
+                }
+            
+            # Store in session state
+            st.session_state.results = results
+            st.session_state.inputs = inputs
+    
+    # Display results from session state
+    if st.session_state.results:
+        st.header("Load Combination Results")
+        
+        for stage in ["1", "2", "3"]:
+            if stage not in st.session_state.results:
+                continue
+                
+            data = st.session_state.results[stage]
+            st.subheader(f"Stage {stage}: {data['description']}")
+            
+            # Critical Members
+            st.markdown("**Critical Members (γ_d = 1.3)**")
+            critical_df = create_results_dataframe(data['critical'], stage, 1.3)
+            st.dataframe(critical_df, hide_index=True, use_container_width=True)
+            
+            # Non-Critical Members
+            st.markdown("**Non-Critical Members (γ_d = 1.0)**")
+            non_critical_df = create_results_dataframe(data['non_critical'], stage, 1.0)
+            st.dataframe(non_critical_df, hide_index=True, use_container_width=True)
+        
+        # Generate PDF and create download link (without button rerun)
+        if st.session_state.inputs and st.session_state.results:
+            with st.spinner("Generating PDF report..."):
+                pdf_buffer = generate_pdf_report(
+                    st.session_state.inputs, 
+                    st.session_state.results, 
+                    project_number, 
+                    project_name
+                )
+                
+                # Create download link that won't rerun the script
+                b64 = base64.b64encode(pdf_buffer.getvalue()).decode()
+                href = f'<a href="data:application/pdf;base64,{b64}" download="Load_Combination_Report_{project_number}.pdf" style="display: inline-block; padding: 0.5em 1em; background-color: #f63366; color: white; border-radius: 0.5em; text-decoration: none;">Download PDF Report</a>'
+                st.markdown(href, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
