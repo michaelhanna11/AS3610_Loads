@@ -1,4 +1,3 @@
-
 import streamlit as st
 import os
 import io
@@ -7,7 +6,7 @@ import requests
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_JUSTIFY, TA_LEFT, TA_CENTER
 import pandas as pd
@@ -119,18 +118,18 @@ def generate_pdf_report(inputs, results, project_number, project_name):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, 
                           leftMargin=15*mm, rightMargin=15*mm,
-                          topMargin=30*mm, bottomMargin=15*mm)  # Increased top margin for header
+                          topMargin=20*mm, bottomMargin=15*mm)  # Reduced top margin from 30*mm
     
     styles = getSampleStyleSheet()
     
-    # Custom styles
+    # Custom styles (adjusted for single-page fit)
     title_style = ParagraphStyle(
         name='Title',
         parent=styles['Title'],
-        fontSize=16,
-        leading=20,
+        fontSize=14,  # Reduced from 16
+        leading=18,
         alignment=TA_CENTER,
-        spaceAfter=12
+        spaceAfter=8  # Reduced from 12
     )
     
     subtitle_style = ParagraphStyle(
@@ -157,6 +156,13 @@ def generate_pdf_report(inputs, results, project_number, project_name):
         spaceAfter=8
     )
     
+    heading3_style = ParagraphStyle(
+        name='Heading3',
+        parent=styles['Heading3'],
+        fontSize=11,  # Reduced from 12
+        spaceAfter=4  # Reduced from 6
+    )
+    
     normal_style = ParagraphStyle(
         name='Normal',
         parent=styles['Normal'],
@@ -177,16 +183,16 @@ def generate_pdf_report(inputs, results, project_number, project_name):
     table_cell_style = ParagraphStyle(
         name='TableCell',
         parent=styles['Normal'],
-        fontSize=9,
-        leading=11,
+        fontSize=8,  # Reduced from 9
+        leading=9,   # Reduced from 11
         alignment=TA_LEFT
     )
     
     table_cell_center_style = ParagraphStyle(
         name='TableCellCenter',
         parent=styles['Normal'],
-        fontSize=9,
-        leading=11,
+        fontSize=8,  # Reduced from 9
+        leading=9,   # Reduced from 11
         alignment=TA_CENTER
     )
     
@@ -203,7 +209,7 @@ def generate_pdf_report(inputs, results, project_number, project_name):
         f"<b>Date:</b> {datetime.now().strftime('%d %B %Y')}"
     )
     elements.append(Paragraph(project_info, normal_style))
-    elements.append(Spacer(1, 15*mm))
+    elements.append(Spacer(1, 8*mm))  # Reduced from 15*mm
     
     # Input Parameters section
     elements.append(Paragraph("Input Parameters", heading1_style))
@@ -259,12 +265,12 @@ def generate_pdf_report(inputs, results, project_number, project_name):
         ('RIGHTPADDING', (0, 0), (-1, -1), 3),
     ]))
     elements.append(input_table)
-    elements.append(PageBreak())
+    # Removed PageBreak()
     
     # Results section
     elements.append(Paragraph("Load Combination Results", heading1_style))
     elements.append(Paragraph("Strength Limit State - AS 3610.2 (Int):2023 Table 3.3.1", subtitle_style))
-    elements.append(Spacer(1, 10*mm))
+    elements.append(Spacer(1, 6*mm))  # Reduced from 10*mm
     
     for stage in ["1", "2", "3"]:
         if stage not in results:
@@ -273,10 +279,10 @@ def generate_pdf_report(inputs, results, project_number, project_name):
         data = results[stage]
         stage_title = f"Stage {stage}: {data['description']}"
         elements.append(Paragraph(stage_title, heading2_style))
-        elements.append(Spacer(1, 5*mm))
+        elements.append(Spacer(1, 3*mm))  # Reduced from 5*mm
         
         # Critical Members
-        elements.append(Paragraph("Critical Members (γ<sub>d</sub> = 1.3)", styles['Heading3']))
+        elements.append(Paragraph("Critical Members (γ<sub>d</sub> = 1.3)", heading3_style))
         
         critical_data = [[
             Paragraph("Combination", table_header_style),
@@ -307,10 +313,10 @@ def generate_pdf_report(inputs, results, project_number, project_name):
             ('RIGHTPADDING', (0, 0), (-1, -1), 3),
         ]))
         elements.append(critical_table)
-        elements.append(Spacer(1, 10*mm))
+        elements.append(Spacer(1, 6*mm))  # Reduced from 10*mm
         
         # Non-Critical Members
-        elements.append(Paragraph("Non-Critical Members (γ<sub>d</sub> = 1.0)", styles['Heading3']))
+        elements.append(Paragraph("Non-Critical Members (γ<sub>d</sub> = 1.0)", heading3_style))
         
         non_critical_data = [[
             Paragraph("Combination", table_header_style),
@@ -342,8 +348,7 @@ def generate_pdf_report(inputs, results, project_number, project_name):
         ]))
         elements.append(non_critical_table)
         
-        if stage != "3":
-            elements.append(PageBreak())
+        # Removed PageBreak()
     
     # Header and Footer drawing function
     def draw_header_footer(canvas, doc):
